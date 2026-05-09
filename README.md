@@ -1,5 +1,5 @@
-#Kodi IMDb Top250 Fetcher<br>
-##Overview<br>
+# Kodi IMDb Top250 Fetcher
+## Overview
 
 This Python 3 script fetches the current IMDb Top250 movie ranking directly from IMDb using Playwright.<br>
 It generates a lightweight dataset containing ranking positions and IMDb IDs, designed for integration with Kodi add-ons or other media management tools.<br>
@@ -11,7 +11,7 @@ The script also maintains a historical change log showing:<br>
 
 Movie titles and release years in the history log are resolved using The Movie Database (TMDb) API.<br>
 
-##Problem<br>
+## Problem
 IMDb Top250 changes over time:<br>
 - movies enter and leave the ranking<br>
 - positions move daily<br>
@@ -22,7 +22,7 @@ Additionally:<br>
 - IMDb page structure is JavaScript-rendered<br>
 - simple requests/BeautifulSoup scraping is unreliable<br>
 
-##Solution<br>
+## Solution
 This script:<br>
 - Uses Playwright + Chromium to render IMDb Top250 page properly<br>
 - Extracts ranking positions and IMDb IDs<br>
@@ -39,16 +39,16 @@ Example:<br>
 - Resolves movie titles and years using TMDb API<br>
 - Avoids rewriting output file when no changes are detected<br>
 
-##Output Files<br>
-###Top250.txt<br>
+## Output Files
+### Top250.txt
 
 Contains current IMDb Top250 dataset:<br>
 
-1|tt0111161
-2|tt0068646
-3|tt0468569
+1|tt0111161<br>
+2|tt0068646<br>
+3|tt0468569<br>
 
-###imdb_top250_history.log<br>
+### imdb_top250_history.log
 Contains historical changes:<br>
 
 2026-05-09 10:43:22: Top250 changed!(+1 -1, moved 8)<br>
@@ -56,7 +56,7 @@ NEW: tt10431500 at #250 "Miracle in Cell No. 7 (2019)"<br>
 REMOVED: tt8108198 (was #250) "Andhadhun (2018)"<br>
 MOVE: tt7286456 90->89 "Joker (2019)"<br>
 
-###Timestamped execution logs<br>
+### Timestamped execution logs
 Example:
 
 20260509104322_imdb_top250.log
@@ -74,7 +74,7 @@ Designed primarily for:<br>
 - Docker environments<br>
 - Kodi backend infrastructure<br>
 
-##Important Recommendation<br>
+## Important Recommendation
 
 This script uses:<br>
 - Playwright<br>
@@ -89,7 +89,7 @@ Docker provides:<br>
 - safer upgrades<br>
 - cleaner DSM system<br>
 
-##Prerequisites<br>
+## Prerequisites
 
 Requirements:<br>
 - Python 3<br>
@@ -102,13 +102,13 @@ Python modules used:<br>
 
 The script automatically installs missing Python modules if needed.<br>
 
-##Docker Recommendation<br>
+## Docker Recommendation
 Recommended Docker image:<br>
 
 mcr.microsoft.com/playwright/python<br>
 
 
-##Usage<br>
+## Usage
 1. Copy the script to your Docker mapped volume or server<br>
 2. Edit CONFIG section:<br>
 - output paths<br>
@@ -118,7 +118,7 @@ mcr.microsoft.com/playwright/python<br>
 
 python3 imdb_top250.py
 
-##Scheduling<br>
+## Scheduling
 The script is designed for scheduled execution.<br>
 
 Typical usage:<br>
@@ -126,7 +126,7 @@ Typical usage:<br>
 - cron job<br>
 - Docker scheduled task<br>
 
-##Notes<br>
+## Notes
 The generated Top250.txt file changes only when IMDb Top250 actually changes.<br>
 This allows external tools (for example Kodi add-ons) to:<br>
 - compare timestamps<br>
@@ -138,3 +138,34 @@ The script is intentionally designed to store only:<br>
 - IMDb ID<br>
 
 Movie titles are resolved dynamically only for human-readable history logs.<br>
+
+
+# This project is provided for personal/private use only.
+
+The generated dataset file:<br>
+
+Top250.txt<br>
+
+<b>must not be:</b><br>
+- redistributed<br>
+- published<br>
+- mirrored<br>
+- shared publicly<br>
+- uploaded to websites<br>
+- committed to public GitHub repositories<br>
+
+or otherwise exposed publicly in any form.<br>
+
+The script is intended solely to allow private synchronization of IMDb Top250 information for personal media library usage.<br>
+
+Generating and locally using a lightweight Top250 dataset for personal/private use does not violate IMDb usage rules.<br>
+
+However:<br>
+- redistribution of IMDb-derived datasets<br>
+- public mirrors<br>
+- commercial usage<br>
+- public APIs serving IMDb-derived data<br>
+
+may violate IMDb Terms of Use and should be avoided.<br>
+
+
