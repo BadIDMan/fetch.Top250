@@ -168,4 +168,9 @@ However:<br>
 
 may violate IMDb Terms of Use and should be avoided.<br>
 
+### Result in "history" log:<br>
+<img width="432" height="936" alt="Screenshot_20260512_131028_SSH Remote" src="https://github.com/user-attachments/assets/cbfc4a72-ff24-4d8c-93be-9fcb39a61daa" />
+
+
+
 
