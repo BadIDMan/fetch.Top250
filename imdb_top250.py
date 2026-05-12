@@ -225,7 +225,7 @@ def append_history_detailed(status, changes, timestamp):
         f"moved {len(changes['moved'])})"
     )
     with open(history_path, "a") as f:
-        f.write(summary + "\n")
+        f.write("\n" + summary + "\n")
         for imdb_id, rank in changes["new"]:
             title = get_movie_title(imdb_id)
             f.write(
