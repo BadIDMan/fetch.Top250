@@ -3,7 +3,8 @@ import sys
 import os
 import re
 from datetime import datetime, timedelta
-
+from zoneinfo import ZoneInfo
+from datetime import datetime
 
 # =========================
 # CONFIG
@@ -13,8 +14,17 @@ TEMP_OUTPUT = "/data/Top250_temp.txt"
 LOG_DIR = "/log" #<-- logs folder
 LOG_FILE = "imdb_top250" #<-- log files pattern
 HISTORY_LOG = "imdb_top250_history.log" #<-- file with history how rankings changes
-LOG_RETENTION_YEARS = 2
-TMDB_API_KEY = "6abc1234567890123456789012345678" #<-- put here your OWN TMDB API Key
+LOG_RETENTION_DAYS = 7
+TMDB_API_KEY = "11111111111111111111111111111111" #<-- put here your OWN TMDB API Key
+TIME_ZONE_NAME = "Europe/Warsaw" #<-- Defines the time zone used in log files.
+#The value must be a valid IANA time zone name, for example:
+#Europe/Warsaw
+#Europe/London
+#America/New_York
+#Asia/Tokyo
+#Australia/Sydney
+#Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+TIME_ZONE = ZoneInfo(TIME_ZONE_NAME)
 
 
 # =========================
@@ -62,28 +72,28 @@ def get_log_path():
     ts = datetime.now().strftime("%Y%m%d%H%M%S")
     return os.path.join(
         LOG_DIR,
-        f"{ts}_{LOG_FILE}.log"
+        f"{LOG_FILE}_{ts}.log"
     )
+
 
 def cleanup_logs():
     if not os.path.exists(LOG_DIR):
         return
-    cutoff = datetime.now() - timedelta(
-        days=365 * LOG_RETENTION_YEARS
-    )
+    cutoff = datetime.now() - timedelta(days=LOG_RETENTION_DAYS)
     for fname in os.listdir(LOG_DIR):
         if not fname.endswith(".log"):
             continue
+        # do not delete history log
+        if fname == HISTORY_LOG:
+            continue
         try:
-            ts_str = fname.split("_")[0]
-            file_dt = datetime.strptime(
-                ts_str,
-                "%Y%m%d%H%M%S"
-            )
+            ts_str = fname.rsplit("_", 1)[1].replace(".log", "")
+            file_dt = datetime.strptime(ts_str,"%Y%m%d%H%M%S")
             if file_dt < cutoff:
                 os.remove(os.path.join(LOG_DIR, fname))
-        except:
-            continue
+        except Exception as e:
+            print(f"Failed to process log file "f"{fname}: {e}")
+
 
 def write_log(log_path, line):
     with open(log_path, "w") as f:
@@ -209,6 +219,50 @@ def append_history_detailed(status, changes, timestamp):
         LOG_DIR,
         HISTORY_LOG
     )
+    lines = []
+    if status == "unchanged":
+        lines.append(
+            f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: "
+            f"Top250 unchanged"
+        )
+    else:
+        summary = (
+            f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: "
+            f"Top250 changed! "
+            f"(+{len(changes['new'])} "
+            f"-{len(changes['removed'])}, "
+            f"moved {len(changes['moved'])})"
+        )
+        lines.append(summary)
+        for imdb_id, rank in changes["new"]:
+            title = get_movie_title(imdb_id)
+            lines.append(
+                f'  NEW: {imdb_id} at #{rank} "{title}"'
+            )
+        for imdb_id, rank in changes["removed"]:
+            title = get_movie_title(imdb_id)
+            lines.append(
+                f'  REMOVED: {imdb_id} '
+                f'(was #{rank}) "{title}"'
+            )
+        for imdb_id, old, new in changes["moved"]:
+            title = get_movie_title(imdb_id)
+            lines.append(
+                f'  MOVE: {imdb_id} '
+                f'{old}->{new} "{title}"'
+            )
+    text = "\n".join(lines)
+    with open(history_path, "a") as f:
+        f.write("\n" + text + "\n")
+    return text
+
+
+
+def append_history_detailed_old(status, changes, timestamp):
+    history_path = os.path.join(
+        LOG_DIR,
+        HISTORY_LOG
+    )
     if status == "unchanged":
         line = (
             f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: "
@@ -219,7 +273,7 @@ def append_history_detailed(status, changes, timestamp):
         return
     summary = (
         f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: "
-        f"Top250 changed!"
+        f"Top250 changed! "
         f"(+{len(changes['new'])} "
         f"-{len(changes['removed'])}, "
         f"moved {len(changes['moved'])})"
@@ -231,14 +285,12 @@ def append_history_detailed(status, changes, timestamp):
             f.write(
                 f'  NEW: {imdb_id} at #{rank} "{title}"\n'
             )
-
         for imdb_id, rank in changes["removed"]:
             title = get_movie_title(imdb_id)
             f.write(
                 f'  REMOVED: {imdb_id} '
                 f'(was #{rank}) "{title}"\n'
             )
-
         for imdb_id, old, new in changes["moved"]:
             title = get_movie_title(imdb_id)
             f.write(
@@ -252,7 +304,7 @@ def append_history_detailed(status, changes, timestamp):
 # MAIN
 # =========================
 def main():
-    start_time = datetime.now()
+    start_time = datetime.now(TIME_ZONE)
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
@@ -296,7 +348,7 @@ def main():
     sorted_list = sorted(results.items())
     old_data = load_existing()
     status = write_if_changed(sorted_list)
-    end_time = datetime.now()
+    end_time = datetime.now(TIME_ZONE)
     if status in ("updated", "created"):
         changes = compare_top250(
             old_data,
@@ -304,29 +356,29 @@ def main():
         )
     else:
         changes = None
-    append_history_detailed(
+    history_text = append_history_detailed(
         status,
         changes,
         end_time
     )
-
-
     # =========================
     # LOGGING
     # =========================
     log_path = get_log_path()
-    log_line = (
+
+    log_header = (
         f"Start time: "
-        f"{start_time.strftime('%Y-%m-%d %H:%M:%S')} "
+        f"{start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
         f"End time: "
-        f"{end_time.strftime('%Y-%m-%d %H:%M:%S')} "
+        f"{end_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
         f"Number of IDs collected: "
-        f"{len(sorted_list)} "
-        f"Status: {status}"
+        f"{len(sorted_list)}\n"
+        f"Status: {status}\n"
     )
-    write_log(log_path, log_line)
+    full_log = (log_header + "\n" + history_text)
+    write_log(log_path, full_log)
     cleanup_logs()
-    print(log_line)
+    print(full_log)
 
 
 if __name__ == "__main__":
