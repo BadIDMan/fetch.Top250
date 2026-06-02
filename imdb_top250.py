@@ -69,7 +69,7 @@ import requests
 def get_log_path():
     if not os.path.exists(LOG_DIR):
         os.makedirs(LOG_DIR)
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
+    ts = datetime.now(TIME_ZONE).strftime("%Y%m%d%H%M%S")
     return os.path.join(
         LOG_DIR,
         f"{LOG_FILE}_{ts}.log"
@@ -79,7 +79,7 @@ def get_log_path():
 def cleanup_logs():
     if not os.path.exists(LOG_DIR):
         return
-    cutoff = datetime.now() - timedelta(days=LOG_RETENTION_DAYS)
+    cutoff = datetime.now(TIME_ZONE) - timedelta(days=LOG_RETENTION_DAYS)
     for fname in os.listdir(LOG_DIR):
         if not fname.endswith(".log"):
             continue
