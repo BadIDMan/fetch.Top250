@@ -59,7 +59,7 @@ MOVE: tt7286456 90->89 "Joker (2019)"<br>
 ### Timestamped execution logs
 Example:
 
-20260509104322_imdb_top250.log
+imdb_top250_20260602075021.log
 
 Contains:<br>
 - start time<br>
