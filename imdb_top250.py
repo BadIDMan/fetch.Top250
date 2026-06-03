@@ -79,20 +79,22 @@ def get_log_path():
 def cleanup_logs():
     if not os.path.exists(LOG_DIR):
         return
-    cutoff = datetime.now(TIME_ZONE) - timedelta(days=LOG_RETENTION_DAYS)
+    cutoff = (datetime.now(TIME_ZONE) - timedelta(days=LOG_RETENTION_DAYS))
     for fname in os.listdir(LOG_DIR):
         if not fname.endswith(".log"):
             continue
-        # do not delete history log
         if fname == HISTORY_LOG:
             continue
+        if not fname.startswith(f"{LOG_FILE}_"):
+            continue
         try:
-            ts_str = fname.rsplit("_", 1)[1].replace(".log", "")
-            file_dt = datetime.strptime(ts_str,"%Y%m%d%H%M%S")
+            ts_str = (fname.rsplit("_", 1)[1].replace(".log", ""))
+            file_dt = datetime.strptime(ts_str, "%Y%m%d%H%M%S").replace(tzinfo=TIME_ZONE)
             if file_dt < cutoff:
                 os.remove(os.path.join(LOG_DIR, fname))
+                print(f"Deleted old log: {fname}")
         except Exception as e:
-            print(f"Failed to process log file "f"{fname}: {e}")
+            print(f"Failed to process log file " f"{fname}: {e}")
 
 
 def write_log(log_path, line):
