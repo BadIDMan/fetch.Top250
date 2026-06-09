@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 import re
+import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from datetime import datetime
@@ -14,7 +15,9 @@ TEMP_OUTPUT = "/data/Top250_temp.txt"
 LOG_DIR = "/log" #<-- logs folder
 LOG_FILE = "imdb_top250" #<-- log files pattern
 HISTORY_LOG = "imdb_top250_history.log" #<-- file with history how rankings changes
-LOG_RETENTION_DAYS = 7
+LOG_RETENTION_DAYS = 8
+MAX_ATTEMPTS = 5
+RETRY_DELAY_SECONDS = 300  # 5 minutes
 TMDB_API_KEY = "11111111111111111111111111111111" #<-- put here your OWN TMDB API Key
 TIME_ZONE_NAME = "Europe/Warsaw" #<-- Defines the time zone used in log files.
 #The value must be a valid IANA time zone name, for example:
@@ -25,7 +28,6 @@ TIME_ZONE_NAME = "Europe/Warsaw" #<-- Defines the time zone used in log files.
 #Australia/Sydney
 #Full list: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 TIME_ZONE = ZoneInfo(TIME_ZONE_NAME)
-
 
 # =========================
 # PLAYWRIGHT ENSURE
@@ -259,85 +261,91 @@ def append_history_detailed(status, changes, timestamp):
     return text
 
 
-
-def append_history_detailed_old(status, changes, timestamp):
-    history_path = os.path.join(
-        LOG_DIR,
-        HISTORY_LOG
-    )
-    if status == "unchanged":
-        line = (
-            f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: "
-            f"Top250 unchanged"
-        )
-        with open(history_path, "a") as f:
-            f.write(line + "\n")
-        return
-    summary = (
-        f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: "
-        f"Top250 changed! "
-        f"(+{len(changes['new'])} "
-        f"-{len(changes['removed'])}, "
-        f"moved {len(changes['moved'])})"
-    )
-    with open(history_path, "a") as f:
-        f.write("\n" + summary + "\n")
-        for imdb_id, rank in changes["new"]:
-            title = get_movie_title(imdb_id)
-            f.write(
-                f'  NEW: {imdb_id} at #{rank} "{title}"\n'
-            )
-        for imdb_id, rank in changes["removed"]:
-            title = get_movie_title(imdb_id)
-            f.write(
-                f'  REMOVED: {imdb_id} '
-                f'(was #{rank}) "{title}"\n'
-            )
-        for imdb_id, old, new in changes["moved"]:
-            title = get_movie_title(imdb_id)
-            f.write(
-                f'  MOVE: {imdb_id} '
-                f'{old}->{new} "{title}"\n'
-            )
-
-
-
 # =========================
 # MAIN
 # =========================
 def main():
     start_time = datetime.now(TIME_ZONE)
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-blink-features=AutomationControlled"
-            ]
-        )
-        context = browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 "
-                "(Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 "
-                "(KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            viewport={
-                "width": 1920,
-                "height": 1080
-            },
-            locale="en-US"
-        )
-        page = context.new_page()
-        page.goto(
-            "https://www.imdb.com/chart/top/",
-            timeout=60000
-        )
-        page.wait_for_load_state("networkidle")
-        page.wait_for_timeout(5000)
-        html = page.content()
-        browser.close()
+    html = None
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            print(
+                f"[IMDb Top250] Attempt "
+                f"{attempt}/{MAX_ATTEMPTS}"
+            )
+            with sync_playwright() as p:
+                browser = p.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--no-sandbox",
+                        "--disable-blink-features=AutomationControlled"
+                    ]
+                )
+                context = browser.new_context(
+                    user_agent=(
+                        "Mozilla/5.0 "
+                        "(Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) "
+                        "Chrome/122.0.0.0 Safari/537.36"
+                    ),
+                    viewport={
+                        "width": 1920,
+                        "height": 1080
+                    },
+                    locale="en-US"
+                )
+                page = context.new_page()
+                page.goto(
+                    "https://www.imdb.com/chart/top/",
+                    timeout=80000
+                )
+                page.wait_for_load_state(
+                    "networkidle",
+                    timeout=80000
+                )
+                page.wait_for_timeout(5000)
+                html = page.content()
+                browser.close()
+            # Verify that data really exists
+            pattern = re.findall(
+                r'/title/(tt\d+)/\?ref_=chttp_[ti]_(\d+)',
+                html
+            )
+
+            # Protection from partially loaded page
+            unique_ranks = {
+                int(rank)
+                for imdb_id, rank in pattern
+            }
+            ranks = sorted(unique_ranks)
+            if ranks != list(range(1, 251)):
+                raise Exception(
+                    f"Incomplete ranking detected"
+                )
+
+            print(
+                f"[IMDb Top250] Success "
+                f"on attempt {attempt}"
+            )
+            break
+        except Exception as e:
+            print(
+                f"[IMDb Top250] Attempt "
+                f"{attempt} failed: {e}"
+            )
+            if attempt < MAX_ATTEMPTS:
+                print(
+                    f"[IMDb Top250] Waiting "
+                    f"{RETRY_DELAY_SECONDS} seconds "
+                    f"before retry..."
+                )
+                time.sleep(RETRY_DELAY_SECONDS)
+            else:
+                raise
+    # =========================
+    # PROCESS RESULTS
+    # =========================
     results = {}
     pattern = re.findall(
         r'/title/(tt\d+)/\?ref_=chttp_[ti]_(\d+)',
@@ -348,6 +356,13 @@ def main():
         if rank not in results:
             results[rank] = imdb_id
     sorted_list = sorted(results.items())
+
+    if len(sorted_list) != 250:
+        raise Exception(
+            f"Refusing to write dataset: "
+            f"{len(sorted_list)} items found"
+        )
+
     old_data = load_existing()
     status = write_if_changed(sorted_list)
     end_time = datetime.now(TIME_ZONE)
@@ -377,10 +392,15 @@ def main():
         f"{len(sorted_list)}\n"
         f"Status: {status}\n"
     )
-    full_log = (log_header + "\n" + history_text)
+    full_log = (
+        log_header
+        + "\n"
+        + history_text
+    )
     write_log(log_path, full_log)
     cleanup_logs()
     print(full_log)
+
 
 
 if __name__ == "__main__":
